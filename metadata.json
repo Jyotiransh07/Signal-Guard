@@ -1,0 +1,7 @@
+{
+  "name": "SignalGuard - Intelligent Alert Fatigue Reducer",
+  "description": "Smart middleware telemetry dashboard that groups duplicate errors, deduplicates alerts in real time, and suppresses alert fatigue with live cooldown matrices and interactive 3D topology.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
