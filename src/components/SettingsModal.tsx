@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { AppSettings } from '../types';
-import { X, Sliders, MessageSquare, Bell, RotateCcw, Database, CheckCircle2, AlertCircle, Loader2, Copy, Check } from 'lucide-react';
-import { testPushSampleToSupabase } from '../lib/supabaseSync';
+import { X, Sliders, MessageSquare, Bell, RotateCcw, ShieldCheck, Clock, Sparkles } from 'lucide-react';
 
 interface Props {
   settings: AppSettings;
@@ -16,45 +15,6 @@ export const SettingsModal: React.FC<Props> = ({
   onClose,
   onResetAllData,
 }) => {
-  const [testingSupabase, setTestingSupabase] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [copiedSql, setCopiedSql] = useState(false);
-
-  const handleTestSupabase = async () => {
-    setTestingSupabase(true);
-    setTestResult(null);
-    try {
-      const res = await testPushSampleToSupabase();
-      setTestResult(res);
-    } catch (e: any) {
-      setTestResult({
-        success: false,
-        message: e?.message || 'Error executing Supabase test write'
-      });
-    } finally {
-      setTestingSupabase(false);
-    }
-  };
-
-  const sqlSnippet = `CREATE TABLE IF NOT EXISTS public.signals (
-    id TEXT PRIMARY KEY,
-    type TEXT,
-    title TEXT,
-    service TEXT,
-    severity TEXT,
-    message TEXT,
-    suppressed BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-GRANT ALL ON TABLE public.signals TO anon, authenticated;
-ALTER TABLE public.signals DISABLE ROW LEVEL SECURITY;`;
-
-  const handleCopySql = () => {
-    navigator.clipboard.writeText(sqlSnippet);
-    setCopiedSql(true);
-    setTimeout(() => setCopiedSql(false), 2000);
-  };
-
   const currentChannels = settings?.channels || {
     slack: true,
     pagerduty: true,
@@ -83,81 +43,13 @@ ALTER TABLE public.signals DISABLE ROW LEVEL SECURITY;`;
         </div>
 
         <div className="space-y-4 text-xs">
-          {/* Supabase Live Integration Status & Tester */}
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-emerald-500" />
-                <span className="font-semibold text-slate-800 dark:text-slate-200">Supabase Cloud Database</span>
-              </div>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Configured
-              </span>
-            </div>
-
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Target backend table: <code className="text-blue-600 dark:text-blue-400 font-mono">signals</code>.
-            </p>
-
-            <button
-              onClick={handleTestSupabase}
-              disabled={testingSupabase}
-              className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
-            >
-              {testingSupabase ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Testing write permissions...</span>
-                </>
-              ) : (
-                <>
-                  <Database className="w-3.5 h-3.5" />
-                  <span>Send Test Record to Supabase</span>
-                </>
-              )}
-            </button>
-
-            {testResult && (
-              <div className={`p-2.5 rounded-lg border text-xs flex flex-col gap-2 ${
-                testResult.success 
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300'
-                  : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/50 dark:border-rose-800 dark:text-rose-300'
-              }`}>
-                <div className="flex items-start gap-2">
-                  {testResult.success ? (
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-                  )}
-                  <p className="font-medium flex-1">{testResult.message}</p>
-                </div>
-
-                {!testResult.success && (
-                  <div className="mt-1 pt-2 border-t border-rose-200 dark:border-rose-800/60 space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">Run this in Supabase SQL Editor:</span>
-                      <button
-                        onClick={handleCopySql}
-                        className="px-2 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1 text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
-                      >
-                        {copiedSql ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                        <span>{copiedSql ? 'Copied' : 'Copy SQL'}</span>
-                      </button>
-                    </div>
-                    <pre className="p-2 rounded bg-black/60 text-[10px] text-slate-200 font-mono overflow-x-auto whitespace-pre">
-                      {sqlSnippet}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Cooldown Window Slider */}
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2">
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">Suppression Cooldown Window (TTL):</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-500" />
+                Suppression Cooldown Window (TTL):
+              </span>
               <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">{settings?.cooldownWindowSec || 60} seconds</span>
             </div>
             <input
@@ -177,7 +69,10 @@ ALTER TABLE public.signals DISABLE ROW LEVEL SECURITY;`;
           {/* Grouping Similarity Threshold */}
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2">
             <div className="flex justify-between items-center">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">Signature Grouping Threshold:</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                Signature Grouping Threshold:
+              </span>
               <span className="text-violet-600 dark:text-violet-400 font-bold text-sm">{((settings?.similarityThreshold || 0.85) * 100).toFixed(0)}%</span>
             </div>
             <input
@@ -190,7 +85,7 @@ ALTER TABLE public.signals DISABLE ROW LEVEL SECURITY;`;
               className="w-full accent-blue-600 cursor-pointer"
             />
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Clustering tolerance for matching dynamic parameters into the same root incident.
+              Clustering tolerance for matching dynamic parameters (e.g. user IDs, memory addresses) into the same root incident.
             </p>
           </div>
 
