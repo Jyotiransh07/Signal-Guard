@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppSettings } from '../types';
-import { X, Sliders, MessageSquare, Bell, RotateCcw, Database, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Sliders, MessageSquare, Bell, RotateCcw, Database, CheckCircle2, AlertCircle, Loader2, Copy, Check } from 'lucide-react';
 import { testPushSampleToSupabase } from '../lib/supabaseSync';
 
 interface Props {
@@ -18,6 +18,7 @@ export const SettingsModal: React.FC<Props> = ({
 }) => {
   const [testingSupabase, setTestingSupabase] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   const handleTestSupabase = async () => {
     setTestingSupabase(true);
@@ -33,6 +34,25 @@ export const SettingsModal: React.FC<Props> = ({
     } finally {
       setTestingSupabase(false);
     }
+  };
+
+  const sqlSnippet = `CREATE TABLE IF NOT EXISTS public.signals (
+    id TEXT PRIMARY KEY,
+    type TEXT,
+    title TEXT,
+    service TEXT,
+    severity TEXT,
+    message TEXT,
+    suppressed BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+GRANT ALL ON TABLE public.signals TO anon, authenticated;
+ALTER TABLE public.signals DISABLE ROW LEVEL SECURITY;`;
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(sqlSnippet);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2000);
   };
 
   const currentChannels = settings?.channels || {
@@ -99,19 +119,37 @@ export const SettingsModal: React.FC<Props> = ({
             </button>
 
             {testResult && (
-              <div className={`p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+              <div className={`p-2.5 rounded-lg border text-xs flex flex-col gap-2 ${
                 testResult.success 
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-300'
                   : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/50 dark:border-rose-800 dark:text-rose-300'
               }`}>
-                {testResult.success ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
-                )}
-                <div className="space-y-1">
-                  <p className="font-medium">{testResult.message}</p>
+                <div className="flex items-start gap-2">
+                  {testResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                  )}
+                  <p className="font-medium flex-1">{testResult.message}</p>
                 </div>
+
+                {!testResult.success && (
+                  <div className="mt-1 pt-2 border-t border-rose-200 dark:border-rose-800/60 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Run this in Supabase SQL Editor:</span>
+                      <button
+                        onClick={handleCopySql}
+                        className="px-2 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center gap-1 text-slate-700 dark:text-slate-300 hover:bg-slate-50 cursor-pointer"
+                      >
+                        {copiedSql ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedSql ? 'Copied' : 'Copy SQL'}</span>
+                      </button>
+                    </div>
+                    <pre className="p-2 rounded bg-black/60 text-[10px] text-slate-200 font-mono overflow-x-auto whitespace-pre">
+                      {sqlSnippet}
+                    </pre>
+                  </div>
+                )}
               </div>
             )}
           </div>
