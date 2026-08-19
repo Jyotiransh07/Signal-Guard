@@ -34,6 +34,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { RawAlertStreamDrawer } from './components/RawAlertStreamDrawer';
 import { PostMortemModal } from './components/PostMortemModal';
 import { ToastContainer } from './components/ToastContainer';
+import { syncIncident, syncRawAlert, testPushSampleToSupabase } from './lib/supabaseSync';
 
 export default function App() {
   // Theme state: default to 'light'
@@ -49,83 +50,86 @@ export default function App() {
   // Navigation tab state: default to welcoming 'home' page
   const [currentTab, setCurrentTab] = useState<DashboardTab>('home');
 
-  // App Settings
-  const [settings, setSettings] = useState<AppSettings>({
-    cooldownWindowSec: 60,
-    similarityThreshold: 0.75,
-    ingestionSpeed: 'normal',
-    enableAudio: false,
-    autoResolveAfterSec: 0,
-    channels: {
-      slack: true,
-      pagerduty: true,
-      discord: true,
-      webhook: true,
-    }
-  });
-
-  // Main infrastructure & telemetry states
+  // Core App State
   const [instances, setInstances] = useState<AppInstance[]>(INITIAL_INSTANCES);
   const [rawAlerts, setRawAlerts] = useState<RawAlert[]>([]);
   const [incidents, setIncidents] = useState<IncidentThread[]>([]);
   const [cooldownCells, setCooldownCells] = useState<CooldownCell[]>([]);
   const [metricsHistory, setMetricsHistory] = useState<MetricsHistoryPoint[]>([]);
 
-  // Selection & Modal States
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
+  // Selection & UI controls
   const [selectedIncident, setSelectedIncident] = useState<IncidentThread | null>(null);
   const [postMortemIncident, setPostMortemIncident] = useState<IncidentThread | null>(null);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [isCustomAlertModalOpen, setIsCustomAlertModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isRawTerminalOpen, setIsRawTerminalOpen] = useState(false);
-
-  // Active Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Apply dark mode class to root document element and sync localStorage
+  // Configurable Application Settings
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    try {
+      const saved = localStorage.getItem('signalguard_settings');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('Failed to parse saved settings', e);
+    }
+    return {
+      cooldownWindowSec: 60,
+      similarityThreshold: 0.85,
+      enableSlack: true,
+      enablePagerDuty: true,
+      enableAudio: true,
+      ingestionSpeed: 'normal',
+    };
+  });
+
+  // Save theme to localStorage and HTML class
   useEffect(() => {
     try {
       localStorage.setItem('signalguard_theme', theme);
-    } catch {}
-
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-      document.body.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      document.body.classList.remove('dark');
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) {
+      console.warn('Failed to save theme', e);
     }
   }, [theme]);
 
+  // Toggle Theme helper
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  // Keep sound engine in sync with settings
+  // Sync sound engine enabled state with user settings
   useEffect(() => {
     soundEngine.setEnabled(settings.enableAudio);
-  }, [settings.enableAudio]);
+    try {
+      localStorage.setItem('signalguard_settings', JSON.stringify(settings));
+    } catch (e) {
+      console.warn('Failed to save settings', e);
+    }
+  }, [settings]);
 
-  // Push a new Toast notification
-  const showToast = useCallback((
-    title: string, 
-    description: string, 
-    type: ToastMessage['type'] = 'info'
-  ) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    setToasts(prev => [
-      { id, title, description, type, timestamp: Date.now() },
-      ...prev.slice(0, 4)
-    ]);
-
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
+  // Toast Dispatcher Helper
+  const showToast = useCallback((title: string, description: string, type: ToastMessage['type'] = 'info') => {
+    const newToast: ToastMessage = {
+      id: `toast-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      title,
+      description,
+      type,
+      timestamp: Date.now(),
+    };
+    setToasts(prev => [newToast, ...prev.slice(0, 4)]);
   }, []);
 
-  const dismissToast = useCallback((id: string) => {
+  const handleDismissToast = (id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
+  };
 
   // Initialize Cooldown Cells from Error Templates on load
   useEffect(() => {
@@ -142,7 +146,7 @@ export default function App() {
     setCooldownCells(initialCells);
   }, []);
 
-  // Pre-seed realistic initial incidents on load
+  // Pre-seed realistic initial incidents on load and sync to Supabase
   useEffect(() => {
     const now = Date.now();
     const seedTmpl = ERROR_TEMPLATES[0]; // Connection pool
@@ -337,6 +341,10 @@ export default function App() {
           cooldownExpiresAt: suppressed ? targetIncident.cooldownExpiresAt : (now + settings.cooldownWindowSec * 1000)
         };
 
+        // Async sync to Supabase
+        syncIncident(updatedIncident);
+        syncRawAlert({ ...rawAlertObj, incidentId: updatedIncident.id });
+
         const next = [...prevIncidents];
         next[existingIdx] = updatedIncident;
         return next;
@@ -363,6 +371,10 @@ export default function App() {
           recommendedAction: action,
         };
 
+        // Async sync to Supabase
+        syncIncident(newThread);
+        syncRawAlert({ ...rawAlertObj, incidentId: newThread.id });
+
         return [newThread, ...prevIncidents.slice(0, 29)];
       }
     });
@@ -380,33 +392,38 @@ export default function App() {
       }
       return item;
     }));
+
   }, [instances, settings, showToast]);
 
-  // Periodic Random Alert Ingestion Generator
+  // Automated Ingestion Loop based on ingestionSpeed
   useEffect(() => {
     if (settings.ingestionSpeed === 'paused') return;
 
-    const intervalTimes = {
-      slow: 5500,
-      normal: 3000,
-      fast: 1200,
-      chaos: 400,
+    const intervalMap = {
+      slow: 8000,
+      normal: 4500,
+      fast: 1800,
     };
 
-    const intervalTime = intervalTimes[settings.ingestionSpeed];
+    const intervalTime = intervalMap[settings.ingestionSpeed as 'slow' | 'normal' | 'fast'] || 4500;
 
     const timer = setInterval(() => {
+      // Pick random error template
       const tmpl = ERROR_TEMPLATES[Math.floor(Math.random() * ERROR_TEMPLATES.length)];
-      const inst = instances[Math.floor(Math.random() * instances.length)];
-      const msgGen = tmpl.messageGenerators[Math.floor(Math.random() * tmpl.messageGenerators.length)];
-      const message = msgGen(inst.name);
+      // Pick random instance matching service or fallback
+      const matchingInsts = instances.filter(i => i.service === tmpl.service);
+      const inst = matchingInsts.length > 0
+        ? matchingInsts[Math.floor(Math.random() * matchingInsts.length)]
+        : instances[Math.floor(Math.random() * instances.length)];
+
+      const msg = tmpl.messageGenerators[Math.floor(Math.random() * tmpl.messageGenerators.length)](inst.name);
       const stack = tmpl.stackTraces[Math.floor(Math.random() * tmpl.stackTraces.length)];
 
       processIncomingAlert(
         tmpl.service,
         tmpl.severity,
         tmpl.errorType,
-        message,
+        msg,
         inst.id,
         stack,
         tmpl.httpStatus
@@ -416,62 +433,47 @@ export default function App() {
     return () => clearInterval(timer);
   }, [settings.ingestionSpeed, instances, processIncomingAlert]);
 
-  // Periodic Metrics Aggregator (every 2.5 seconds)
+  // Record Metrics History every 5 seconds
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = Date.now();
-      const totalRaw = incidents.reduce((acc, inc) => acc + inc.alertCount, 0);
-      const totalSupp = incidents.reduce((acc, inc) => acc + inc.suppressedCount, 0);
-      const totalDisp = incidents.reduce((acc, inc) => acc + inc.dispatchedCount, 0);
-      const ratio = totalRaw > 0 ? (totalSupp / totalRaw) * 100 : 96.5;
+    const metricsTimer = setInterval(() => {
+      const totalRaw = incidents.reduce((sum, inc) => sum + inc.alertCount, 0);
+      const totalSuppressed = incidents.reduce((sum, inc) => sum + (inc.suppressedCount || 0), 0);
+      const totalDispatched = incidents.reduce((sum, inc) => sum + (inc.dispatchedCount || 1), 0);
+      const ratio = totalRaw > 0 ? (totalSuppressed / totalRaw) * 100 : 0;
 
-      setMetricsHistory(prev => {
-        const next = [
-          ...prev,
-          {
-            timestamp: now,
-            rawCount: totalRaw,
-            suppressedCount: totalSupp,
-            dispatchedCount: totalDisp,
-            noiseReductionRatio: ratio,
-          }
-        ];
-        return next.slice(-25);
+      setMetricsHistory(history => {
+        const nextPoint: MetricsHistoryPoint = {
+          timestamp: Date.now(),
+          rawCount: totalRaw,
+          suppressedCount: totalSuppressed,
+          dispatchedCount: totalDispatched,
+          noiseReductionRatio: parseFloat(ratio.toFixed(1)),
+        };
+        return [...history.slice(-29), nextPoint];
       });
-    }, 2500);
+    }, 5000);
 
-    return () => clearInterval(timer);
+    return () => clearInterval(metricsTimer);
   }, [incidents]);
 
-  // Manual Burst Inject Action
-  const handleInjectBurst = (count: number = 8) => {
-    const tmpl = ERROR_TEMPLATES[Math.floor(Math.random() * ERROR_TEMPLATES.length)];
-    showToast(
-      `💥 Alert Storm Injected (${count} alerts)`,
-      `Firing rapid burst of ${tmpl.errorType} across servers to test noise filter`,
-      'critical'
-    );
+  // Inject Simulated Burst (Alert Storm)
+  const handleInjectBurst = (count: number = 10) => {
+    const tmpl = ERROR_TEMPLATES[0]; // database pooler
+    const inst = instances[0];
+    soundEngine.playEscalationChime();
+
+    showToast('Alert Storm Simulation Injected', `Triggered ${count} rapid duplicate error events`, 'warning');
 
     for (let i = 0; i < count; i++) {
       setTimeout(() => {
-        const inst = instances[i % instances.length];
-        const msgGen = tmpl.messageGenerators[i % tmpl.messageGenerators.length];
-        const message = msgGen(inst.name);
-        processIncomingAlert(
-          tmpl.service,
-          tmpl.severity,
-          tmpl.errorType,
-          message,
-          inst.id,
-          tmpl.stackTraces[0],
-          tmpl.httpStatus
-        );
-      }, i * 65);
+        const msg = tmpl.messageGenerators[i % tmpl.messageGenerators.length](inst.name);
+        processIncomingAlert(tmpl.service, tmpl.severity, tmpl.errorType, msg, inst.id, tmpl.stackTraces[0], tmpl.httpStatus);
+      }, i * 180);
     }
   };
 
-  // Custom Alert Injection from Modal
-  const handleInjectCustom = (payload: {
+  // Inject Custom Craft Alert
+  const handleInjectCustom = (alertData: {
     service: ServiceType;
     severity: Severity;
     errorType: string;
@@ -479,27 +481,22 @@ export default function App() {
     instanceId: string;
     count: number;
   }) => {
-    showToast(
-      `⚡ Custom Alert Injected`,
-      `${payload.count}x ${payload.errorType} sent to ${payload.instanceId}`,
-      'info'
-    );
-
-    for (let i = 0; i < payload.count; i++) {
+    showToast('Custom Alert Created', `Injected ${alertData.count}x "${alertData.errorType}"`, 'info');
+    for (let i = 0; i < alertData.count; i++) {
       setTimeout(() => {
         processIncomingAlert(
-          payload.service,
-          payload.severity,
-          payload.errorType,
-          payload.message,
-          payload.instanceId
+          alertData.service,
+          alertData.severity,
+          alertData.errorType,
+          alertData.message,
+          alertData.instanceId
         );
-      }, i * 80);
+      }, i * 200);
     }
   };
 
-  // Trigger test alert for a specific cell in Cooldown Matrix
-  const handleTriggerTestCell = (cell: CooldownCell) => {
+  // Inject Single Alert from Matrix
+  const handleInjectSingleAlert = (cell: CooldownCell) => {
     const tmpl = ERROR_TEMPLATES.find(t => t.errorType === cell.errorType) || ERROR_TEMPLATES[0];
     const inst = instances[Math.floor(Math.random() * instances.length)];
     const msg = tmpl.messageGenerators[0](inst.name);
@@ -575,37 +572,38 @@ export default function App() {
       memoryUsage: Math.max(35, inst.memoryUsage - 15)
     })));
 
-    showToast('Incident Resolved', `Incident ${incidentId} resolved. Instance health normalized!`, 'success');
+    showToast('Incident Resolved', `Incident ${incidentId} resolved successfully`, 'success');
   };
 
-  // Escalate to External Channels
-  const handleEscalate = (incidentId: string, channel: 'pagerduty' | 'slack' | 'discord') => {
-    const channelNames = {
-      pagerduty: 'PagerDuty High-Urgency Page',
-      slack: 'Slack #eng-incidents Block Kit',
-      discord: 'Discord #ops-alerts Webhook'
-    };
+  // Escalate Incident (e.g. to Slack / PagerDuty)
+  const handleEscalate = (incidentId: string, channel: 'slack' | 'pagerduty') => {
+    const inc = incidents.find(i => i.id === incidentId);
+    if (!inc) return;
 
+    soundEngine.playEscalationChime();
     showToast(
-      `Escalated to ${channelNames[channel]}`,
-      `Incident ${incidentId} dispatched with aggregated telemetry payload`,
+      channel === 'slack' ? 'Slack Message Dispatched' : 'PagerDuty Incident Triggered',
+      `Delivered alert summary to #${inc.service}-oncall`,
       channel
     );
   };
 
-  // Reset entire telemetry state
-  const handleResetAllData = () => {
-    setRawAlerts([]);
-    setIncidents([]);
-    setMetricsHistory([]);
-    setInstances(INITIAL_INSTANCES);
-    showToast('Telemetry Stream Cleared', 'All incident buffers and statistics have been reset', 'info');
-  };
+  // Global calculations
+  const totalRawAlerts = useMemo(() => {
+    return incidents.reduce((sum, inc) => sum + inc.alertCount, 0);
+  }, [incidents]);
 
-  const totalRawAlerts = incidents.reduce((acc, inc) => acc + inc.alertCount, 0);
-  const totalSuppressed = incidents.reduce((acc, inc) => acc + inc.suppressedCount, 0);
-  const totalDispatched = incidents.reduce((acc, inc) => acc + inc.dispatchedCount, 0);
-  const activeIncidentsCount = incidents.filter(i => i.status !== 'resolved').length;
+  const totalSuppressed = useMemo(() => {
+    return incidents.reduce((sum, inc) => sum + (inc.suppressedCount || 0), 0);
+  }, [incidents]);
+
+  const totalDispatched = useMemo(() => {
+    return incidents.reduce((sum, inc) => sum + (inc.dispatchedCount || 1), 0);
+  }, [incidents]);
+
+  const activeIncidentsCount = useMemo(() => {
+    return incidents.filter(i => i.status === 'active' || i.status === 'cooldown_suppressed').length;
+  }, [incidents]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors">
@@ -648,6 +646,7 @@ export default function App() {
             <IncidentList
               incidents={incidents}
               selectedInstanceId={selectedInstanceId}
+              onClearInstanceFilter={() => setSelectedInstanceId(null)}
               onSelectIncident={setSelectedIncident}
               onAcknowledge={handleAcknowledge}
               onResolve={handleResolve}
@@ -656,33 +655,31 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 2: Server Health Topology */}
+        {/* Tab 2: Interactive 3D Server Topology Map */}
         {currentTab === 'topology' && (
           <div className="space-y-6">
             <Topology3DCanvas
               instances={instances}
-              recentAlerts={rawAlerts}
+              incidents={incidents}
               selectedInstanceId={selectedInstanceId}
               onSelectInstance={setSelectedInstanceId}
             />
           </div>
         )}
 
-        {/* Tab 3: Suppression Matrix */}
+        {/* Tab 3: Suppression Cooldown Matrix */}
         {currentTab === 'matrix' && (
           <div className="space-y-6">
             <CooldownMatrix
               cooldownCells={cooldownCells}
-              instances={instances}
               cooldownWindowSec={settings.cooldownWindowSec}
-              onUpdateCooldownWindow={sec => setSettings(s => ({ ...s, cooldownWindowSec: sec }))}
+              onInjectSingleAlert={handleInjectSingleAlert}
               onResetCooldown={handleResetCooldown}
-              onTriggerTestCell={handleTriggerTestCell}
             />
           </div>
         )}
 
-        {/* Tab 4: Alert Routing Pipeline & Stream */}
+        {/* Tab 4: 4-Stage Ingestion Pipeline */}
         {currentTab === 'stream' && (
           <div className="space-y-6">
             <RoutingPipeline
@@ -751,16 +748,22 @@ export default function App() {
       {isSettingsModalOpen && (
         <SettingsModal
           settings={settings}
-          onUpdateSettings={newS => setSettings(s => ({ ...s, ...newS }))}
+          onUpdateSettings={newS => {
+            setSettings(s => ({ ...s, ...newS }));
+            showToast('Settings Updated', 'Telemetry filter rules updated', 'info');
+          }}
           onClose={() => setIsSettingsModalOpen(false)}
-          onResetAllData={handleResetAllData}
+          onResetAllData={() => {
+            setIncidents([]);
+            setRawAlerts([]);
+            showToast('Data Reset', 'Cleared local incidents buffer', 'info');
+          }}
         />
       )}
 
       {isRawTerminalOpen && (
         <RawAlertStreamDrawer
           alerts={rawAlerts}
-          isOpen={isRawTerminalOpen}
           onClose={() => setIsRawTerminalOpen(false)}
           onClear={() => setRawAlerts([])}
         />
@@ -773,8 +776,8 @@ export default function App() {
         />
       )}
 
-      {/* Toast Alert Notifications */}
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      {/* Global Real-Time Toast Notifications */}
+      <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
     </div>
   );
 }
