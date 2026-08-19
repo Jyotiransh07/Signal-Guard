@@ -267,24 +267,21 @@ export const IncidentList: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* Title & Signature */}
+                  {/* Title & Status info */}
                   <div>
                     <div className="flex items-start justify-between gap-3">
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white leading-snug">
                         {incident.title}
                       </h4>
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                        sig: {incident.fingerprint}
-                      </span>
-                      {isCoolingDown && incident.status !== 'resolved' && (
+                    {isCoolingDown && incident.status !== 'resolved' && (
+                      <div className="flex items-center gap-2 mt-1">
                         <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-800 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           Cooldown lock: {cooldownRemainingSec}s remaining
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Telemetry Summary Stats Row */}

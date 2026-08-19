@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
+import { Github } from 'lucide-react';
 import { 
   AppInstance, 
   RawAlert, 
@@ -709,11 +710,20 @@ export default function App() {
 
       </main>
 
-      {/* Clean, simple footer */}
-      <footer className="border-t border-slate-200 dark:border-slate-800 py-6 px-4 text-center text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 transition-colors">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      {/* Clean, simple footer with GitHub repository link */}
+      <footer className="border-t border-slate-200 dark:border-slate-800 py-4 px-4 text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 transition-colors">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <span>SignalGuard — Stop Alert Fatigue & Notification Spam</span>
-          <span className="text-slate-400 dark:text-slate-500">Live Telemetry Deduplication • 96.8% Noise Filtered</span>
+          <a
+            href="https://github.com/Jyotiransh07/Signal-Guard"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-xs transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+            title="View Source on GitHub"
+          >
+            <Github className="w-4 h-4" />
+            <span>GitHub Repository</span>
+          </a>
         </div>
       </footer>
 

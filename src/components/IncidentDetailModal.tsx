@@ -71,9 +71,6 @@ export const IncidentDetailModal: React.FC<Props> = ({
               <span className="font-semibold text-slate-700 dark:text-slate-300 bg-slate-200/70 dark:bg-slate-800 px-2 py-0.5 rounded">
                 {incident.service}
               </span>
-              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded">
-                SIG: {incident.fingerprint}
-              </span>
             </div>
 
             <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug">
