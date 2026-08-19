@@ -36,6 +36,20 @@ import { PostMortemModal } from './components/PostMortemModal';
 import { ToastContainer } from './components/ToastContainer';
 import { syncIncident, syncRawAlert, testPushSampleToSupabase } from './lib/supabaseSync';
 
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  cooldownWindowSec: 60,
+  similarityThreshold: 0.85,
+  ingestionSpeed: 'normal',
+  enableAudio: true,
+  autoResolveAfterSec: 0,
+  channels: {
+    slack: true,
+    pagerduty: true,
+    discord: true,
+    webhook: true,
+  },
+};
+
 export default function App() {
   // Theme state: default to 'light'
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -66,24 +80,25 @@ export default function App() {
   const [isRawTerminalOpen, setIsRawTerminalOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Configurable Application Settings
+  // Configurable Application Settings with safe defaults
   const [settings, setSettings] = useState<AppSettings>(() => {
     try {
       const saved = localStorage.getItem('signalguard_settings');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        return {
+          ...DEFAULT_APP_SETTINGS,
+          ...parsed,
+          channels: {
+            ...DEFAULT_APP_SETTINGS.channels,
+            ...(parsed.channels || {}),
+          },
+        };
       }
     } catch (e) {
       console.warn('Failed to parse saved settings', e);
     }
-    return {
-      cooldownWindowSec: 60,
-      similarityThreshold: 0.85,
-      enableSlack: true,
-      enablePagerDuty: true,
-      enableAudio: true,
-      ingestionSpeed: 'normal',
-    };
+    return DEFAULT_APP_SETTINGS;
   });
 
   // Save theme to localStorage and HTML class

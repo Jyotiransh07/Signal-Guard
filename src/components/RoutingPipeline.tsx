@@ -1,21 +1,15 @@
 import React, { useState } from 'react';
 import { RawAlert, AppSettings, IncidentThread } from '../types';
 import { 
-  ArrowRight, 
   Radio, 
   Layers, 
-  Filter, 
   Bell, 
   MessageSquare, 
   MessageCircle, 
   Terminal, 
-  ShieldCheck, 
   Clock, 
   CheckCircle2, 
-  Flame, 
-  Cpu, 
-  Database,
-  ExternalLink
+  Flame 
 } from 'lucide-react';
 
 interface Props {
@@ -27,22 +21,30 @@ interface Props {
 }
 
 export const RoutingPipeline: React.FC<Props> = ({
-  alerts,
-  incidents,
+  alerts = [],
+  incidents = [],
   settings,
   onUpdateSettings,
   onInjectBurst,
 }) => {
   const [streamFilter, setStreamFilter] = useState<'all' | 'suppressed' | 'dispatched'>('all');
 
-  const totalAlerts = alerts.length;
-  const suppressedCount = alerts.filter(a => a.suppressedByCooldown).length;
-  const dispatchedCount = alerts.filter(a => !a.suppressedByCooldown).length;
+  const safeAlerts = Array.isArray(alerts) ? alerts : [];
+  const totalAlerts = safeAlerts.length;
+  const suppressedCount = safeAlerts.filter(a => a?.suppressedByCooldown).length;
+  const dispatchedCount = safeAlerts.filter(a => !a?.suppressedByCooldown).length;
   const noiseReductionRatio = totalAlerts > 0 ? Math.round((suppressedCount / totalAlerts) * 100) : 96;
 
-  const filteredAlerts = alerts.filter(a => {
-    if (streamFilter === 'suppressed') return a.suppressedByCooldown;
-    if (streamFilter === 'dispatched') return !a.suppressedByCooldown;
+  const currentChannels = settings?.channels || {
+    slack: true,
+    pagerduty: true,
+    discord: true,
+    webhook: true,
+  };
+
+  const filteredAlerts = safeAlerts.filter(a => {
+    if (streamFilter === 'suppressed') return a?.suppressedByCooldown;
+    if (streamFilter === 'dispatched') return !a?.suppressedByCooldown;
     return true;
   }).slice(0, 15);
 
@@ -103,7 +105,7 @@ export const RoutingPipeline: React.FC<Props> = ({
           </div>
           <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-xs">
             <span className="text-slate-500 dark:text-slate-400">Similarity Match:</span>
-            <span className="font-bold text-violet-600 dark:text-violet-400">{(settings.similarityThreshold * 100).toFixed(0)}%</span>
+            <span className="font-bold text-violet-600 dark:text-violet-400">{((settings?.similarityThreshold || 0.85) * 100).toFixed(0)}%</span>
           </div>
         </div>
 
@@ -115,7 +117,7 @@ export const RoutingPipeline: React.FC<Props> = ({
           </div>
           <div className="text-sm font-bold text-slate-900 dark:text-white">Cooldown Lockout</div>
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            Silently squelches duplicates during the {settings.cooldownWindowSec}s cooldown period.
+            Silently squelches duplicates during the {settings?.cooldownWindowSec || 60}s cooldown period.
           </div>
           <div className="pt-2 border-t border-amber-200 dark:border-amber-900/50 flex justify-between items-center text-xs">
             <span className="text-amber-700 dark:text-amber-400 font-medium">Noise Filtered:</span>
@@ -155,11 +157,11 @@ export const RoutingPipeline: React.FC<Props> = ({
           <label className="flex items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-slate-300">
             <input
               type="checkbox"
-              checked={settings.channels.slack}
+              checked={Boolean(currentChannels.slack)}
               onChange={e => onUpdateSettings({
-                channels: { ...settings.channels, slack: e.target.checked }
+                channels: { ...currentChannels, slack: e.target.checked }
               })}
-              className="rounded accent-blue-600"
+              className="rounded accent-blue-600 cursor-pointer"
             />
             <MessageSquare className="w-4 h-4 text-amber-500" />
             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Slack #eng-ops</span>
@@ -168,11 +170,11 @@ export const RoutingPipeline: React.FC<Props> = ({
           <label className="flex items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-slate-300">
             <input
               type="checkbox"
-              checked={settings.channels.pagerduty}
+              checked={Boolean(currentChannels.pagerduty)}
               onChange={e => onUpdateSettings({
-                channels: { ...settings.channels, pagerduty: e.target.checked }
+                channels: { ...currentChannels, pagerduty: e.target.checked }
               })}
-              className="rounded accent-blue-600"
+              className="rounded accent-blue-600 cursor-pointer"
             />
             <Bell className="w-4 h-4 text-emerald-500" />
             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">PagerDuty P1</span>
@@ -181,11 +183,11 @@ export const RoutingPipeline: React.FC<Props> = ({
           <label className="flex items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-slate-300">
             <input
               type="checkbox"
-              checked={settings.channels.discord}
+              checked={Boolean(currentChannels.discord)}
               onChange={e => onUpdateSettings({
-                channels: { ...settings.channels, discord: e.target.checked }
+                channels: { ...currentChannels, discord: e.target.checked }
               })}
-              className="rounded accent-blue-600"
+              className="rounded accent-blue-600 cursor-pointer"
             />
             <MessageCircle className="w-4 h-4 text-violet-500" />
             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">Discord Alert</span>
@@ -194,11 +196,11 @@ export const RoutingPipeline: React.FC<Props> = ({
           <label className="flex items-center gap-2 p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-slate-300">
             <input
               type="checkbox"
-              checked={settings.channels.webhook}
+              checked={Boolean(currentChannels.webhook)}
               onChange={e => onUpdateSettings({
-                channels: { ...settings.channels, webhook: e.target.checked }
+                channels: { ...currentChannels, webhook: e.target.checked }
               })}
-              className="rounded accent-blue-600"
+              className="rounded accent-blue-600 cursor-pointer"
             />
             <Terminal className="w-4 h-4 text-blue-500" />
             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">JSON Webhook</span>
@@ -216,19 +218,19 @@ export const RoutingPipeline: React.FC<Props> = ({
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
             <button
               onClick={() => setStreamFilter('all')}
-              className={`px-2.5 py-1 rounded transition-colors ${
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
                 streamFilter === 'all'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              All ({alerts.length})
+              All ({safeAlerts.length})
             </button>
             <button
               onClick={() => setStreamFilter('suppressed')}
-              className={`px-2.5 py-1 rounded transition-colors ${
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
                 streamFilter === 'suppressed'
-                  ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 font-bold shadow-sm'
+                  ? 'bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 font-bold shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -236,9 +238,9 @@ export const RoutingPipeline: React.FC<Props> = ({
             </button>
             <button
               onClick={() => setStreamFilter('dispatched')}
-              className={`px-2.5 py-1 rounded transition-colors ${
+              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
                 streamFilter === 'dispatched'
-                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-sm'
+                  ? 'bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >

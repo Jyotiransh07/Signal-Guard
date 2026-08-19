@@ -35,6 +35,13 @@ export const SettingsModal: React.FC<Props> = ({
     }
   };
 
+  const currentChannels = settings?.channels || {
+    slack: true,
+    pagerduty: true,
+    discord: true,
+    webhook: true,
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-lg w-full p-5 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
@@ -49,7 +56,7 @@ export const SettingsModal: React.FC<Props> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -70,7 +77,7 @@ export const SettingsModal: React.FC<Props> = ({
             </div>
 
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Target tables: <code className="text-blue-600 dark:text-blue-400 font-mono">incidents</code> and <code className="text-blue-600 dark:text-blue-400 font-mono">raw_alerts</code>.
+              Target backend table: <code className="text-blue-600 dark:text-blue-400 font-mono">signals</code>.
             </p>
 
             <button
@@ -113,14 +120,14 @@ export const SettingsModal: React.FC<Props> = ({
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2">
             <div className="flex justify-between items-center">
               <span className="font-semibold text-slate-800 dark:text-slate-200">Suppression Cooldown Window (TTL):</span>
-              <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">{settings.cooldownWindowSec} seconds</span>
+              <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">{settings?.cooldownWindowSec || 60} seconds</span>
             </div>
             <input
               type="range"
               min="15"
               max="300"
               step="5"
-              value={settings.cooldownWindowSec}
+              value={settings?.cooldownWindowSec || 60}
               onChange={e => onUpdateSettings({ cooldownWindowSec: Number(e.target.value) })}
               className="w-full accent-blue-600 cursor-pointer"
             />
@@ -133,19 +140,19 @@ export const SettingsModal: React.FC<Props> = ({
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 space-y-2">
             <div className="flex justify-between items-center">
               <span className="font-semibold text-slate-800 dark:text-slate-200">Signature Grouping Threshold:</span>
-              <span className="text-violet-600 dark:text-violet-400 font-bold text-sm">{(settings.similarityThreshold * 100).toFixed(0)}%</span>
+              <span className="text-violet-600 dark:text-violet-400 font-bold text-sm">{((settings?.similarityThreshold || 0.85) * 100).toFixed(0)}%</span>
             </div>
             <input
               type="range"
               min="0.5"
               max="0.95"
               step="0.05"
-              value={settings.similarityThreshold}
+              value={settings?.similarityThreshold || 0.85}
               onChange={e => onUpdateSettings({ similarityThreshold: Number(e.target.value) })}
               className="w-full accent-blue-600 cursor-pointer"
             />
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Clustering tolerance for matching dynamic parameters (e.g. user IDs, memory addresses) into the same root incident.
+              Clustering tolerance for matching dynamic parameters into the same root incident.
             </p>
           </div>
 
@@ -157,11 +164,11 @@ export const SettingsModal: React.FC<Props> = ({
               <label className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-slate-300">
                 <input
                   type="checkbox"
-                  checked={settings.channels.slack}
+                  checked={Boolean(currentChannels.slack)}
                   onChange={e => onUpdateSettings({
-                    channels: { ...settings.channels, slack: e.target.checked }
+                    channels: { ...currentChannels, slack: e.target.checked }
                   })}
-                  className="rounded accent-blue-600"
+                  className="rounded accent-blue-600 cursor-pointer"
                 />
                 <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
                 <span className="text-slate-700 dark:text-slate-300 text-xs">Slack #eng-ops</span>
@@ -170,11 +177,11 @@ export const SettingsModal: React.FC<Props> = ({
               <label className="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-slate-300">
                 <input
                   type="checkbox"
-                  checked={settings.channels.pagerduty}
+                  checked={Boolean(currentChannels.pagerduty)}
                   onChange={e => onUpdateSettings({
-                    channels: { ...settings.channels, pagerduty: e.target.checked }
+                    channels: { ...currentChannels, pagerduty: e.target.checked }
                   })}
-                  className="rounded accent-blue-600"
+                  className="rounded accent-blue-600 cursor-pointer"
                 />
                 <Bell className="w-3.5 h-3.5 text-emerald-500" />
                 <span className="text-slate-700 dark:text-slate-300 text-xs">PagerDuty P1</span>
